@@ -1,113 +1,30 @@
-# Установим библиотеку nest_asyncio
-import nest_asyncio
-nest_asyncio.apply()
 # Установим библиотеку aiosqlite
 import aiosqlite
 import asyncio
 import logging
+import json
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters.command import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from aiogram import F
 
+
 # Включаем логирование, чтобы не пропустить важные сообщения
 logging.basicConfig(level=logging.INFO)
 
 # Замените "YOUR_BOT_TOKEN" на токен, который вы получили от BotFather
-API_TOKEN = '6668308719:AAHK0qbIGxf9UIbZK4_k99ID0H1JkjxkNIw'
+API_TOKEN = 'YOUR_BOT_TOKEN
+# Зададим имя базы данных
+DB_NAME = 'quiz_bot.db'
 
+DICT_DATA = 'data/quiz_data.json'
 # Объект бота
 bot = Bot(token=API_TOKEN)
 # Диспетчер
 dp = Dispatcher()
 
-# Зададим имя базы данных
-DB_NAME = 'quiz_bot.db'
-
-# Структура квиза
-quiz_data = [
-    {
-        'question': 'Что такое Python?',
-        'options': ['Язык программирования', \
-            'Тип данных', \
-            'Музыкальный инструмент', \
-            'Змея на английском'],
-        'correct_option': 0
-    },
-    {
-        'question': 'Какой тип данных используется для хранения целых чисел?',
-        'options': ['int', \
-            'float', \
-            'str', \
-            'natural'],
-        'correct_option': 0
-    },
-    {
-        'question': 'Что такое ИИ?',
-        'options': ['Играй Илья', \
-            'Иннокентий Ибрагимович', \
-            'Искусственный интеллект', \
-            'Имитационное изобретение'],
-        'correct_option': 2
-    },
-    {
-        'question': 'Какой оператор используется для сравнения двух значений в программировании?',
-        'options': ['=', \
-            '==', \
-            '!=', \
-            '+='],
-        'correct_option': 1
-    },
-    {
-        'question': 'Что делает оператор if в программировании?',
-        'options': ['Проверяет условие и выполняет соответствующий блок кода', \
-            'Сравнивает два значения', \
-            'Повторяет выполнение блока кода определенное количество раз', \
-            'Заканчивает выполнение программы'],
-        'correct_option': 0
-    },
-    {
-        'question': 'Что такое программа “Hello, World!”?',
-        'options': [' Это программа, которая выводит текст “Hello, World!” на экран', \
-            'Это программа для создания нового текстового файла с текстом “Hello, World!”', \
-            'Это программа для редактирования существующего текстового файла и замены текста на “Hello, World!”', \
-            'Это программа, которую невозможно выполнить, так как она не имеет смысла'],
-        'correct_option': 0
-    },
-    {
-        'question': 'Как создать новый файл в Python?',
-        'options': ['С помощью функции open()', \
-            'С помощью команды print()', \
-            'С помощью оператора if', \
-            'С помощью переменной print'],
-        'correct_option': 0
-    },
-    {
-        'question': 'Что делает функция input() в Python?',
-        'options': ['Выводит данные на экран и возвращает строку', \
-            'Игнорирует данные с клавиатуры и возвращает None', \
-            'Преобразует данные в число и возвращает число', \
-            'Вводит данные с клавиатуры и возвращает строку'],
-        'correct_option': 3
-    },
-    {
-        'question': 'Что такое цикл в программировании?',
-        'options': ['Блок кода, который выполняется один раз', \
-            'Блок кода, который заканчивается после выполнения определенного условия', \
-            'Блок кода, который повторяется определенное количество раз', \
-            'Блок кода, который никогда не заканчивается'],
-        'correct_option': 2
-    },
-    {
-        'question': 'Что такое комментарий в программировании?',
-        'options': ['Текст, который игнорируется компилятором', \
-            'Текст, который помогает понять код', \
-            'Текст, который запускается при запуске программы', \
-            'Текст, который не имеет смысла'],
-        'correct_option': 1
-    }
-    # Добавьте другие вопросы
-]
+with open(DICT_DATA, 'r') as j:
+    quiz_data = json.loads(j.read())
 
 def generate_options_keyboard(answer_options, right_answer):
   # Создаем сборщика клавиатур типа Inline
@@ -139,13 +56,17 @@ async def right_answer(callback: types.CallbackQuery):
 
     # Получение текущего вопроса для данного пользователя
     current_question_index = await get_quiz_index(callback.from_user.id)
-
+    current_score = await get_user_score(callback.from_user.id)
     # Отправляем в чат сообщение, что ответ верный
-    await callback.message.answer("Верно!")
+    correct_option = quiz_data[current_question_index]['correct_option']
+    await callback.message.answer(f"Верно\nВаш ответ: {quiz_data[current_question_index]['options'][correct_option]}")
 
     # Обновление номера текущего вопроса в базе данных
     current_question_index += 1
+    #Добавление количества правильных ответов
+    current_score += 1
     await update_quiz_index(callback.from_user.id, current_question_index)
+    await update_user_score(callback.from_user.id, current_score)
 
     # Проверяем достигнут ли конец квиза
     if current_question_index < len(quiz_data):
@@ -153,7 +74,7 @@ async def right_answer(callback: types.CallbackQuery):
         await get_question(callback.message, callback.from_user.id)
     else:
         # Уведомление об окончании квиза
-        await callback.message.answer("Это был последний вопрос. Квиз завершен!")
+        await callback.message.answer(f"Это был последний вопрос. Квиз завершен!\nВаш результат: {current_score} правильных ответов")
 
 @dp.callback_query(F.data == "wrong_answer")
 async def wrong_answer(callback: types.CallbackQuery):
@@ -166,7 +87,7 @@ async def wrong_answer(callback: types.CallbackQuery):
 
     # Получение текущего вопроса для данного пользователя
     current_question_index = await get_quiz_index(callback.from_user.id)
-
+    current_score = await get_user_score(callback.from_user.id)
     correct_option = quiz_data[current_question_index]['correct_option']
 
     # Отправляем в чат сообщение об ошибке с указанием верного ответа
@@ -175,6 +96,7 @@ async def wrong_answer(callback: types.CallbackQuery):
     # Обновление номера текущего вопроса в базе данных
     current_question_index += 1
     await update_quiz_index(callback.from_user.id, current_question_index)
+    await update_user_score(callback.from_user.id, current_score)
 
     # Проверяем достигнут ли конец квиза
     if current_question_index < len(quiz_data):
@@ -182,7 +104,7 @@ async def wrong_answer(callback: types.CallbackQuery):
         await get_question(callback.message, callback.from_user.id)
     else:
         # Уведомление об окончании квиза
-        await callback.message.answer("Это был последний вопрос. Квиз завершен!")
+        await callback.message.answer(f"Это был последний вопрос. Квиз завершен!\nВаш результат: {current_score} правильных ответов")
 
 # Хэндлер на команду /start
 @dp.message(Command("start"))
@@ -214,8 +136,9 @@ async def new_quiz(message):
     user_id = message.from_user.id
     # сбрасываем значение текущего индекса вопроса квиза в 0
     current_question_index = 0
+    new_score = 0
     await update_quiz_index(user_id, current_question_index)
-
+    await update_user_score(user_id, new_score)
     # запрашиваем новый вопрос для квиза
     await get_question(message, user_id)
 
@@ -231,11 +154,31 @@ async def get_quiz_index(user_id):
             else:
                 return 0
 
+async def get_user_score(user_id):
+     # Подключаемся к базе данных
+     async with aiosqlite.connect(DB_NAME) as db:
+        # Получаем запись для заданного пользователя
+        async with db.execute('SELECT score FROM users WHERE user_id = ?', (user_id, )) as cursor:
+            # Возвращаем результат
+            results = await cursor.fetchone()
+            if results is not None:
+                return results[0]
+            else:
+                return 0
+
 async def update_quiz_index(user_id, index):
     # Создаем соединение с базой данных (если она не существует, она будет создана)
     async with aiosqlite.connect(DB_NAME) as db:
         # Вставляем новую запись или заменяем ее, если с данным user_id уже существует
         await db.execute('INSERT OR REPLACE INTO quiz_state (user_id, question_index) VALUES (?, ?)', (user_id, index))
+        # Сохраняем изменения
+        await db.commit()
+
+async def update_user_score(user_id, new_score):
+    # Подключаемся к базе данных
+    async with aiosqlite.connect(DB_NAME) as db:
+        # Вставляем новую запись или заменяем ее, если с данным user_id уже существует
+        await db.execute('INSERT INTO users (user_id, score) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET score = excluded.score', (user_id, new_score))
         # Сохраняем изменения
         await db.commit()
 
@@ -250,11 +193,18 @@ async def cmd_quiz(message: types.Message):
 
 async def create_table():
     # Создаем соединение с базой данных (если она не существует, то она будет создана)
-    async with aiosqlite.connect('quiz_bot.db') as db:
+    async with aiosqlite.connect(DB_NAME) as db:
         # Выполняем SQL-запрос к базе данных
         await db.execute('''CREATE TABLE IF NOT EXISTS quiz_state (user_id INTEGER PRIMARY KEY, question_index INTEGER)''')
+        await db.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, score INTEGER)''')
         # Сохраняем изменения
         await db.commit()
+
+# Хэндлер на команды /help
+@dp.message(Command("help"))
+async def cmd_start(message: types.Message):
+    # Отправляем новое сообщение без кнопок
+    await message.answer("Команды бота: \n/start - начать взаимодействие с ботом \n/help - открыть помощь \n/quiz - начать игру")
 
 # Запуск процесса поллинга новых апдейтов
 async def main():
